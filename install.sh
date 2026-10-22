@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Validate before interpolating the version into a release URL.
+if [[ ! "$RUMDL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf 'Expected an exact rumdl version without a v prefix, got: %s\n' "$RUMDL_VERSION" >&2
+    exit 1
+fi
+
+case "${RUNNER_OS}/${RUNNER_ARCH}" in
+    Linux/X64) target=x86_64-unknown-linux-musl ;;
+    Linux/ARM64) target=aarch64-unknown-linux-musl ;;
+    macOS/X64) target=x86_64-apple-darwin ;;
+    macOS/ARM64) target=aarch64-apple-darwin ;;
+    Windows/X64) target=x86_64-pc-windows-msvc ;;
+    *)
+        printf 'Unsupported rumdl platform: %s/%s\n' "$RUNNER_OS" "$RUNNER_ARCH" >&2
+        exit 1
+        ;;
+esac
+
+extension=tar.gz
+if [[ "$RUNNER_OS" == Windows ]]; then
+    extension=zip
+fi
+
+install_dir=$(mktemp -d "${RUNNER_TEMP}/rumdl.XXXXXX")
+archive="rumdl-v${RUMDL_VERSION}-${target}.${extension}"
+curl --fail --silent --show-error --location --retry 3 \
+    "https://github.com/rvben/rumdl/releases/download/v${RUMDL_VERSION}/${archive}" \
+    --output "$install_dir/$archive"
+if [[ "$RUNNER_OS" == Windows ]]; then
+    unzip -q "$install_dir/$archive" -d "$install_dir"
+else
+    tar -xzf "$install_dir/$archive" -C "$install_dir"
+fi
+rm "$install_dir/$archive"
+
+"$install_dir/rumdl" --version
+
+# GitHub expects a native Windows path, rather than Git Bash's /c/... form.
+if [[ "$RUNNER_OS" == Windows ]]; then
+    install_dir=$(cygpath -w "$install_dir")
+fi
+printf '%s\n' "$install_dir" >> "$GITHUB_PATH"

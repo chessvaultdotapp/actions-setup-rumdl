@@ -1,0 +1,54 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: Install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - ubuntu-26.04
+          - ubuntu-26.04-arm
+          - ubuntu-slim
+          - macos-15-intel
+          - macos-26
+          - windows-2025
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install default version
+        uses: ./
+      - name: Verify executable is on PATH
+        shell: bash
+        run: rumdl --version
+      - name: Install explicit version
+        uses: ./
+        with:
+          version: '0.2.75'
+      - name: Verify explicit version
+        shell: bash
+        run: |
+          version=$(rumdl --version)
+          [[ "$version" == 'rumdl 0.2.75' ]]
+
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check installer
+        run: |
+          bash -n install.sh
+          shellcheck install.sh
+      - uses: ./
+      - name: Lint Markdown
+        run: rumdl check README.md
